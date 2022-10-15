@@ -1,0 +1,62 @@
+From bdb81cec63629349ed7251329865e3d7aba9b293 Mon Sep 17 00:00:00 2001
+From: Tobias Grosser <tobias@grosser.es>
+Date: Fri, 14 Oct 2022 19:41:43 +0100
+Subject: [PATCH] Link TableGen to tblgen-lsp-server with using libLLVM
+
+---
+ llvm/cmake/modules/AddLLVM.cmake                | 7 ++++++-
+ mlir/cmake/modules/AddMLIR.cmake                | 5 +++--
+ mlir/lib/Tools/tblgen-lsp-server/CMakeLists.txt | 2 --
+ 3 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/llvm/cmake/modules/AddLLVM.cmake b/llvm/cmake/modules/AddLLVM.cmake
+index 83fb25b40049..3f11e5ab9ae6 100644
+--- a/llvm/cmake/modules/AddLLVM.cmake
++++ b/llvm/cmake/modules/AddLLVM.cmake
+@@ -683,7 +683,12 @@ function(llvm_add_library name)
+     set(llvm_libs ${ARG_PLUGIN_TOOL})
+   elseif (NOT ARG_COMPONENT_LIB)
+     if (LLVM_LINK_LLVM_DYLIB AND NOT ARG_DISABLE_LLVM_LINK_LLVM_DYLIB)
+-      set(llvm_libs LLVM)
++      if(LLVM_LINK_COMPONENTS MATCHES "TableGen")
++	# Preserve TableGen, as TableGen is not part of libLLVM
++	set(llvm_libs LLVM LLVMTableGen)
++      else()
++        set(llvm_libs LLVM)
++      endif()
+     else()
+       llvm_map_components_to_libnames(llvm_libs
+        ${ARG_LINK_COMPONENTS}
+diff --git a/mlir/cmake/modules/AddMLIR.cmake b/mlir/cmake/modules/AddMLIR.cmake
+index 15079eea3009..c4a1802de19a 100644
+--- a/mlir/cmake/modules/AddMLIR.cmake
++++ b/mlir/cmake/modules/AddMLIR.cmake
+@@ -608,9 +608,10 @@ function(mlir_check_link_libraries name)
+         if(${lib} MATCHES "^LLVM$")
+           set(linking_llvm 1)
+         endif()
+-        if((${lib} MATCHES "^LLVM.+") AND ${linking_llvm})
++	if((${lib} MATCHES "^LLVM.+") AND ${linking_llvm} AND (NOT (${lib} MATCHES "^LLVMTableGen")))
+           # This will almost always cause execution problems, since the
+-          # same symbol might be loaded from 2 separate libraries.  This
++	  # same symbol might be loaded from 2 separate libraries. LLVMTableGen
++	  # is an exception, as it is not part of libLLVM. This
+           # often comes from referring to an LLVM library target
+           # explicitly in target_link_libraries()
+           message("WARNING: ${name} links LLVM and ${lib}!")
+diff --git a/mlir/lib/Tools/tblgen-lsp-server/CMakeLists.txt b/mlir/lib/Tools/tblgen-lsp-server/CMakeLists.txt
+index 80fc1ffe4029..cb1215d1e94a 100644
+--- a/mlir/lib/Tools/tblgen-lsp-server/CMakeLists.txt
++++ b/mlir/lib/Tools/tblgen-lsp-server/CMakeLists.txt
+@@ -12,8 +12,6 @@ llvm_add_library(TableGenLspServerLib
+   ADDITIONAL_HEADER_DIRS
+   ${MLIR_MAIN_INCLUDE_DIR}/mlir/Tools/tblgen-lsp-server
+ 
+-  DISABLE_LLVM_LINK_LLVM_DYLIB
+-
+   LINK_LIBS PUBLIC
+   MLIRLspServerSupportLib
+   MLIRSupport
+-- 
+2.34.1
+
